@@ -53,8 +53,8 @@ riot.observable = function(el) {
   };
 
   return el;
-
 };
+
 var FN = {}, // Precompiled templates (JavaScript functions)
   template_escape = {"\\": "\\\\", "\n": "\\n", "\r": "\\r", "'": "\\'"},
   render_escape = {'&': '&amp;', '"': '&quot;', '<': '&lt;', '>': '&gt;'};
@@ -116,4 +116,4 @@ riot.render = function(tmpl, data, escape_fn) {
 
   };
 })();
-})(typeof window !== "undefined" ? window.riot = {} : exports);
+})(typeof window !== "undefined" ? window.riot = {} : (typeof exports !== "undefined" ? exports : self.riot = {}));

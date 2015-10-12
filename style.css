@@ -99,7 +99,15 @@ button.right {
   to { visibility: hidden; }
 }
 
-#save_message {
+.invisible {
+    visibility: hidden;
+}
+
+.faded {
+    opacity: 0.4;
+}
+
+#save_message, #fitness_message {
     color: #555;
     font-size: 12px;
     line-height: 30px;
@@ -187,17 +195,18 @@ button.right {
 }
 
 .statscontainer div {
-    width: 240px;
-    height: 10px;
-    margin-bottom: 8px;
     border-bottom: 1px solid #444;
 }
 
-.statscontainer .key {
-    float: left;
+.statscontainer div, .statscontainer span {
+    position: absolute;
+    display: block;
+    width: 240px;
+    height: 10px;
 }
+
 .statscontainer .value {
-    float: right;
+    text-align: right;
 }
 
 
@@ -208,18 +217,20 @@ button.right {
 .feedback {
     position: absolute;
     width: 1280px;
-    height: 800px;
+    height: 2000px;
     padding-top: 20px;
+    line-height: 20px;
     text-align: center;
     background-color: rgba(44,44,44, 0.6);
     z-index: 5;
+    overflow: hidden;
 }
 
 .movable {
     position: absolute;
     top: 0;
     left: 0;
-    display: inline-block;
+    display: block;
 }
 
 .user {
@@ -246,7 +257,6 @@ button.right {
 .elevator {
     background-color: #4F8686;
     border: 2px solid white;
-    width: 40px;
     height: 46px;
     z-index: 1;
 }
@@ -282,18 +292,20 @@ button.right {
     color: rgba(255, 255, 255, 0.3);
 }
 
+
 .elevator .buttonindicator {
     display: inline-block;
     position: absolute;
     top: 15px;
-    width: 100%;
+    width: 95%;
     text-align: center;
     font-size: 8px;
+    line-height: 8px;
     color: rgba(255, 255, 255, 0.3);
 }
 .elevator .buttonpress {
     cursor: pointer;
-    width: 4px;
+    margin: 0;
     display: inline-block;
 }
 .elevator .buttonpress.activated {
@@ -312,7 +324,7 @@ button.right {
 .floor .buttonindicator {
     cursor: pointer;
     line-height: 50px;
-    padding-left: 36px;
+    padding-left: 50px;
     color: rgba(255, 255, 255, 0.2);
 }
 .floor .buttonindicator .activated {

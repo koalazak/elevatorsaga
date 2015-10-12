@@ -1,8 +1,6 @@
 
-window.testingImpl = '{\n    init: function(elevators, floors) {\n        var rotator = 0;\n        _.each(floors, function(floor) {\n            floor.on("up_button_pressed down_button_pressed", function() {\n                var elevator = elevators[(rotator++) % elevators.length];\n                elevator.goToFloor(floor.level);\n            }); \n        });\n        _.each(elevators, function(elevator) {\n            elevator.on("floor_button_pressed", function(floorNum) {\n                elevator.goToFloor(floorNum);\n            });\n            elevator.on("idle", function() {\n                elevator.goToFloor(0);\n            });\n        });\n    },\n    update: function(dt, elevators, floors) {\n    }\n}';
-
 var createEditor = function() {
-    var lsKey = "elevatorCrushCode_v5"
+    var lsKey = "elevatorCrushCode_v5";
 
     var cm = CodeMirror.fromTextArea(document.getElementById("code"), {
         lineNumbers: true,
@@ -14,10 +12,30 @@ var createEditor = function() {
         extraKeys: {
             // the following Tab key mapping is from http://codemirror.net/doc/manual.html#keymaps
             Tab: function(cm) {
-                var spaces = Array(cm.getOption("indentUnit") + 1).join(" ");
+                var spaces = new Array(cm.getOption("indentUnit") + 1).join(" ");
                 cm.replaceSelection(spaces);
             }
         }
+    });
+
+    // reindent on paste (adapted from https://github.com/ahuth/brackets-paste-and-indent/blob/master/main.js)
+    cm.on("change", function(codeMirror, change) {
+        if(change.origin !== "paste") {
+            return;
+        }
+
+        var lineFrom = change.from.line;
+        var lineTo = change.from.line + change.text.length;
+
+        function reindentLines(codeMirror, lineFrom, lineTo) {
+            codeMirror.operation(function() {
+                codeMirror.eachLine(lineFrom, lineTo, function(lineHandle) {
+                    codeMirror.indentLine(lineHandle.lineNo(), "smart");
+                });
+            });
+        }
+
+        reindentLines(codeMirror, lineFrom, lineTo);
     });
 
     var reset = function() {
@@ -26,6 +44,7 @@ var createEditor = function() {
     var saveCode = function() {
         localStorage.setItem(lsKey, cm.getValue());
         $("#save_message").text("Code saved " + new Date().toTimeString());
+        returnObj.trigger("change");
     };
 
     var existingCode = localStorage.getItem(lsKey);
@@ -55,27 +74,21 @@ var createEditor = function() {
         cm.focus();
     });
 
+    var returnObj = riot.observable({});
     var autoSaver = _.debounce(saveCode, 1000);
     cm.on("change", function() {
         autoSaver();
     });
 
-    returnObj = riot.observable({});
     returnObj.getCodeObj = function() {
         console.log("Getting code...");
         var code = cm.getValue();
+        var obj;
         try {
-            obj = eval("(" + code + ")");
-            console.log("Code is", obj);
-            if(typeof obj.init !== "function") {
-                throw "Code must contain an init function";
-            }
-            if(typeof obj.update !== "function") {
-                throw "Code must contain an update function";
-            }
+            obj = getCodeObjFromCode(code);
             returnObj.trigger("code_success");
         } catch(e) {
-            returnObj.trigger("code_error", e);
+            returnObj.trigger("usercode_error", e);
             return null;
         }
         return obj;
@@ -83,12 +96,18 @@ var createEditor = function() {
     returnObj.setCode = function(code) {
         cm.setValue(code);
     };
+    returnObj.getCode = function() {
+        return cm.getValue();
+    }
+    returnObj.setDevTestCode = function() {
+        cm.setValue($("#devtest-elev-implementation").text().trim());
+    }
 
     $("#button_apply").click(function() {
         returnObj.trigger("apply_code");
     });
     return returnObj;
-}
+};
 
 
 var createParamsUrl = function(current, overrides) {
@@ -100,6 +119,7 @@ var createParamsUrl = function(current, overrides) {
 
 
 $(function() {
+    var tsKey = "elevatorTimeScale";
     var editor = createEditor();
 
     var params = {};
@@ -114,18 +134,17 @@ $(function() {
     var elevatorTempl = document.getElementById("elevator-template").innerHTML.trim();
     var elevatorButtonTempl = document.getElementById("elevatorbutton-template").innerHTML.trim();
     var userTempl = document.getElementById("user-template").innerHTML.trim();
-    var statsTempl = document.getElementById("stats-template").innerHTML.trim();
     var challengeTempl = document.getElementById("challenge-template").innerHTML.trim();
     var feedbackTempl = document.getElementById("feedback-template").innerHTML.trim();
     var codeStatusTempl = document.getElementById("codestatus-template").innerHTML.trim();
 
     var app = riot.observable({});
     app.worldController = createWorldController(1.0 / 60.0);
-    app.worldController.on("code_error", function(e) {
+    app.worldController.on("usercode_error", function(e) {
         console.log("World raised code error", e);
-        editor.trigger("code_error", e);
+        editor.trigger("usercode_error", e);
     });
-    
+
     console.log(app.worldController);
     app.worldCreator = createWorldCreator();
     app.world = undefined;
@@ -141,7 +160,7 @@ $(function() {
     };
 
     app.startChallenge = function(challengeIndex, autoStart) {
-        if(typeof app.world != "undefined") {
+        if(typeof app.world !== "undefined") {
             app.world.unWind();
             // TODO: Investigate if memory leaks happen here
         }
@@ -149,12 +168,13 @@ $(function() {
         app.world = app.worldCreator.createWorld(challenges[challengeIndex].options);
         window.world = app.world;
 
-        clearAll([$world, $stats, $feedback]);
-        presentStats($stats, app.world, statsTempl);
+        clearAll([$world, $feedback]);
+        presentStats($stats, app.world);
         presentChallenge($challenge, challenges[challengeIndex], app, app.world, app.worldController, challengeIndex + 1, challengeTempl);
         presentWorld($world, app.world, floorTempl, elevatorTempl, elevatorButtonTempl, userTempl);
 
         app.worldController.on("timescale_changed", function() {
+            localStorage.setItem(tsKey, app.worldController.timeScale);
             presentChallenge($challenge, challenges[challengeIndex], app, app.world, app.worldController, challengeIndex + 1, challengeTempl);
         });
 
@@ -165,7 +185,6 @@ $(function() {
                 app.worldController.setPaused(true);
                 if(challengeStatus) {
                     presentFeedback($feedback, feedbackTempl, app.world, "Success!", "Challenge completed", createParamsUrl(params, { challenge: (challengeIndex + 2)}));
-                    
                 } else {
                     presentFeedback($feedback, feedbackTempl, app.world, "Challenge failed", "Maybe your program needs an improvement?", "");
                 }
@@ -183,9 +202,23 @@ $(function() {
     editor.on("code_success", function() {
         presentCodeStatus($codestatus, codeStatusTempl);
     });
-    editor.on("code_error", function(error) {
+    editor.on("usercode_error", function(error) {
         presentCodeStatus($codestatus, codeStatusTempl, error);
     });
+    editor.on("change", function() {
+        $("#fitness_message").addClass("faded");
+        var codeStr = editor.getCode();
+        // fitnessSuite(codeStr, true, function(results) {
+        //     var message = "";
+        //     if(!results.error) {
+        //         message = "Fitness avg wait times: " + _.map(results, function(r){ return r.options.description + ": " + r.result.avgWaitTime.toPrecision(3) + "s" }).join("&nbsp&nbsp&nbsp");
+        //     } else {
+        //         message = "Could not compute fitness due to error: " + results.error;
+        //     }
+        //     $("#fitness_message").html(message).removeClass("faded");
+        // });
+    });
+    editor.trigger("change");
 
     riot.route(function(path) {
         params = _.reduce(path.split(","), function(result, p) {
@@ -194,7 +227,7 @@ $(function() {
         }, {});
         var requestedChallenge = 0;
         var autoStart = false;
-        var timeScale = 2.0;
+        var timeScale = parseFloat(localStorage.getItem(tsKey)) || 2.0;
         _.each(params, function(val, key) {
             if(key === "challenge") {
                 requestedChallenge = _.parseInt(val) - 1;
@@ -208,7 +241,7 @@ $(function() {
             } else if(key === "timescale") {
                 timeScale = parseFloat(val);
             } else if(key === "devtest") {
-                editor.setCode(testingImpl);
+                editor.setDevTestCode();
             } else if(key === "fullscreen") {
                 makeDemoFullscreen();
             }

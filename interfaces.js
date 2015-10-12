@@ -2,17 +2,23 @@
 // Interface that hides actual elevator object behind a more robust facade,
 // while also exposing relevant events, and providing some helper queue
 // functions that allow programming without async logic.
-var asElevatorInterface = function(obj, elevator, floorCount) {
+var asElevatorInterface = function(obj, elevator, floorCount, errorHandler) {
     var elevatorInterface = riot.observable(obj);
 
     elevatorInterface.destinationQueue = [];
+
+    var tryTrigger = function(event, arg1, arg2, arg3, arg4) {
+        try {
+            elevatorInterface.trigger(event, arg1, arg2, arg3, arg4);
+        } catch(e) { errorHandler(e); }
+    };
 
     elevatorInterface.checkDestinationQueue = function() {
         if(!elevator.isBusy()) {
             if(elevatorInterface.destinationQueue.length) {
                 elevator.goToFloor(_.first(elevatorInterface.destinationQueue));
             } else {
-                elevatorInterface.trigger("idle");
+                tryTrigger("idle");
             }
         }
     };
@@ -33,12 +39,20 @@ var asElevatorInterface = function(obj, elevator, floorCount) {
 
     elevatorInterface.stop = function() {
         elevatorInterface.destinationQueue = [];
-        elevatorInterface.goToFloor(elevator.getExactFutureFloorIfStopped());
-    }
+        if(!elevator.isBusy()) {
+            elevator.goToFloor(elevator.getExactFutureFloorIfStopped());
+        }
+    };
 
-    elevatorInterface.getFirstPressedFloor = function() { return elevator.getFirstPressedFloor(); };
+    elevatorInterface.getFirstPressedFloor = function() { return elevator.getFirstPressedFloor(); }; // Undocumented and deprecated, will be removed
+    elevatorInterface.getPressedFloors = function() { return elevator.getPressedFloors(); };
     elevatorInterface.currentFloor = function() { return elevator.currentFloor; };
+    elevatorInterface.maxPassengerCount = function() { return elevator.maxUsers; };
     elevatorInterface.loadFactor = function() { return elevator.getLoadFactor(); };
+    elevatorInterface.destinationDirection = function() {
+      if(elevator.destinationY === elevator.y) { return "stopped"; }
+      return elevator.destinationY > elevator.y ? "down" : "up";
+    }
     elevatorInterface.goingUpIndicator = createBoolPassthroughFunction(elevatorInterface, elevator, "goingUpIndicator");
     elevatorInterface.goingDownIndicator = createBoolPassthroughFunction(elevatorInterface, elevator, "goingDownIndicator");
 
@@ -57,15 +71,15 @@ var asElevatorInterface = function(obj, elevator, floorCount) {
     });
 
     elevator.on("passing_floor", function(floorNum, direction) {
-        elevatorInterface.trigger("passing_floor", floorNum, direction);
+        tryTrigger("passing_floor", floorNum, direction);
     });
 
     elevator.on("stopped_at_floor", function(floorNum) {
-        elevatorInterface.trigger("stopped_at_floor", floorNum);
+        tryTrigger("stopped_at_floor", floorNum);
     });
     elevator.on("floor_button_pressed", function(floorNum) {
-        elevatorInterface.trigger("floor_button_pressed", floorNum);
+        tryTrigger("floor_button_pressed", floorNum);
     });
 
     return elevatorInterface;
-}
+};
